@@ -1,0 +1,142 @@
+import java.awt.*;
+import java.awt.image.*;
+import java.util.*;
+
+/**
+ * Class with method to find regions of roughly the same color in an image, to recolor these regions to a random color,
+ * and find the largest region in the image with a determined color.
+ *
+ * @author Emiko Rohn and Renata Edaes Hoh
+ * CS10 Winter 2023, Jan 22
+ */
+
+public class RegionFinder {
+	private static final int maxColorDiff = 20;				// how similar a pixel color must be to the target color, to belong to a region
+	private static final int minRegion = 50; 				// how many points in a region to be worth considering
+
+	private BufferedImage image;                            // the image in which to find regions
+	private BufferedImage recoloredImage;                   // the image with identified regions recolored
+
+	private ArrayList<ArrayList<Point>> regions;			// a region is a list of points
+															// so the identified regions are in a list of lists of points
+
+	public RegionFinder() {
+		this.image = null;
+	}
+
+	public RegionFinder(BufferedImage image) {
+		this.image = image;		
+	}
+
+	public void setImage(BufferedImage image) {
+		this.image = image;
+	}
+
+	public BufferedImage getImage() {
+		return image;
+	}
+
+	public BufferedImage getRecoloredImage() {
+		return recoloredImage;
+	}
+
+	/**
+	 * Sets regions to the flood-fill regions in the image, similar enough to the trackColor.
+	 */
+	public void findRegions(Color targetColor) {
+
+		// We first create a "blank" (white) image with the same dimensions as the original one, in which we will keep
+		// track of which pixels have been visited or not
+		BufferedImage visited = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+		regions = new ArrayList<ArrayList<Point>>(); // Initialize the ArrayList regions
+
+		// Loop over all the pixels of the image
+		for (int y = 0; y < image.getHeight(); y++) {
+			for (int x = 0; x < image.getWidth(); x++) {
+
+				Color currentColor = new Color(image.getRGB(x, y)); // Finding the color of each pixel
+
+				// If the color is similar enough to the targetColor, and it hasn't been visited (its color in the blank image is white)
+				if (colorMatch(currentColor, targetColor) && visited.getRGB(x, y) == 0) {
+
+					// Start a new region and a list of pixels to be visited
+					ArrayList<Point> region = new ArrayList<Point>();
+					ArrayList<Point> toVisit = new ArrayList<Point>();
+					toVisit.add(new Point(x, y)); // First pixel to be visited is the pixel that matches the color
+
+					while(!toVisit.isEmpty()) { // While there is a pixel to be visited
+
+						// find coordinates of the pixel, remove it from the list to be visited, and add it as a point to the region
+						int currentX = (int) toVisit.get(0).getX();
+						int currentY = (int) toVisit.get(0).getY();
+						toVisit.remove(0);
+						region.add(new Point(currentX, currentY));
+
+						// Loop over its 8 neighbors. We need to also set boundaries to only loop over pixels that are at least one pixel away from the
+						// border, so we don't go out of boundaries. We also need to make sure that the pixel wasn't visited yet
+						for (int yNeighbor = Math.max(currentY -1, 0); yNeighbor <= Math.min(currentY + 1, image.getHeight() - 1); yNeighbor++) {
+							for (int xNeighbor = Math.max(currentX -1, 0); xNeighbor <= Math.min(currentX + 1, image.getWidth()) - 1; xNeighbor++) {
+								Color neighborColor = new Color(image.getRGB(xNeighbor, yNeighbor)); // find color of neighbor
+								if ((colorMatch(neighborColor, targetColor)) && (visited.getRGB(xNeighbor, yNeighbor) == 0)) { //if it matches and wasn't visited
+									// add it to the list of pixels to be visited, and mark it as visited
+									toVisit.add(new Point(xNeighbor, yNeighbor));
+									visited.setRGB(xNeighbor, yNeighbor, 1);
+								}
+							}
+						}
+					}
+					if (region.size() >= minRegion) { // if the region we found is bigger or equal to 50 pixels, turn it into a real region
+						regions.add(region);
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Tests whether the two colors are "similar enough" (your definition, subject to the maxColorDiff threshold, which you can vary).
+	 */
+	private static boolean colorMatch(Color c1, Color c2) {
+		// calculate absolute value of each color difference
+		int difference = (Math.abs(c1.getRed() - c2.getRed())) + (Math.abs(c1.getGreen() - c2.getGreen())) +
+				(Math.abs(c1.getBlue() - c2.getBlue()));
+		return difference <= maxColorDiff; // return true if color matches
+	}
+
+	/**
+	 * Returns the largest region detected (if any region has been detected)
+	 */
+	public ArrayList<Point> largestRegion() {
+		int largestRegion = 0; // start with largestRegion being 0 so every region is bigger than it
+		ArrayList<Point> maxRegion = null; // Create list of points in the largest region
+
+		// Loop over all regions in regions and find its size, comparing it to largestRegion
+		for (ArrayList<Point> region : regions) {
+			if (region.size() > largestRegion) {
+				largestRegion = region.size();
+				maxRegion = region;
+			}
+		}
+		return maxRegion;
+	}
+
+	/**
+	 * Sets recoloredImage to be a copy of image, 
+	 * but with each region a uniform random color, 
+	 * so we can see where they are
+	 */
+	public void recolorImage() {
+		// First copy the original
+		recoloredImage = new BufferedImage(image.getColorModel(), image.copyData(null), image.getColorModel().isAlphaPremultiplied(), null);
+
+		// Now recolor the regions in it, looping over each region in regions
+		for (ArrayList<Point> region : regions) {
+			int randomColor = (int)(Math.random() * 16777216); // setting random color for each of the regions
+			for (Point regionPoint : region) { // looping over pixels of each region
+				int x = (int)regionPoint.getX();
+				int y = (int)regionPoint.getY();
+				recoloredImage.setRGB(x, y, randomColor); // recolor region to random color
+			}
+		}
+	}
+}
